@@ -3,6 +3,21 @@ import { z } from "zod";
 
 loadEnv();
 
+/** Treat .env.example placeholders as unset so local demos use mock mode. */
+function cleanSecret(value: string | undefined): string {
+  if (!value) return "";
+  const v = value.trim();
+  if (!v) return "";
+  const placeholders = new Set([
+    "your-jira-api-token",
+    "sk-...",
+    "ghp_...",
+  ]);
+  if (placeholders.has(v)) return "";
+  if (v.startsWith("your-")) return "";
+  return v;
+}
+
 const envSchema = z.object({
   JIRA_BASE_URL: z.string().url().default("https://example.atlassian.net"),
   JIRA_EMAIL: z.string().default("dev@example.com"),
@@ -40,7 +55,14 @@ const envSchema = z.object({
 
 export type AppConfig = z.infer<typeof envSchema>;
 
-export const config: AppConfig = envSchema.parse(process.env);
+const parsed = envSchema.parse(process.env);
+
+export const config: AppConfig = {
+  ...parsed,
+  JIRA_API_TOKEN: cleanSecret(parsed.JIRA_API_TOKEN),
+  LLM_API_KEY: cleanSecret(parsed.LLM_API_KEY),
+  GITHUB_TOKEN: cleanSecret(parsed.GITHUB_TOKEN),
+};
 
 export function assertLiveIntegrations(cfg: AppConfig = config): void {
   const missing: string[] = [];

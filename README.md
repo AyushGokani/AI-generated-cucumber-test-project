@@ -31,14 +31,27 @@ Everything else is automated.
 
 ## Quick start (demo, no credentials)
 
+**PowerShell (Windows):**
+```powershell
+Copy-Item .env.example .env
+npm install
+npx playwright install chromium
+npm run pipeline:dry
+npm run test:unit
+npm run test:cucumber -- --tags '@framework'
+```
+
+**bash / macOS / Linux / Git Bash:**
 ```bash
 cp .env.example .env
 npm install
-npm run pipeline:dry          # mock Jira ticket → generated Cucumber files
-npm run test:unit
 npx playwright install chromium
+npm run pipeline:dry
+npm run test:unit
 npm run test:cucumber -- --tags @framework
 ```
+
+> PowerShell tip: quote tags as `'@framework'` — bare `@framework` is treated as a variable.
 
 Dry-run uses a built-in **DEMO-101** login story and writes:
 
