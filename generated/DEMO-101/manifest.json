@@ -1,0 +1,21 @@
+{
+  "issueKey": "DEMO-101",
+  "featureName": "user-can-log-in-with-valid-credentials",
+  "summary": "Generated BDD coverage for: User can log in with valid credentials",
+  "assumptions": [
+    "Login UI uses accessible labels for email/password and a Sign In button.",
+    "Successful login navigates to a URL containing 'dashboard'.",
+    "BASE_URL defaults to http://localhost:3000.",
+    "This is a mock LLM generation for offline/demo mode."
+  ],
+  "tags": [
+    "@jira-DEMO-101",
+    "@generated",
+    "@e2e"
+  ],
+  "generatedAt": "2026-07-30T03:22:28.215Z",
+  "artifacts": [
+    "features/user-can-log-in-with-valid-credentials.feature",
+    "steps/user-can-log-in-with-valid-credentials.steps.ts"
+  ]
+}

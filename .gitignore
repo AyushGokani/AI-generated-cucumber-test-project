@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+coverage/
+playwright-report/
+test-results/
+.cucumber-report/
+.DS_Store
+*.tsbuildinfo
+.idea/
+.vscode/
+tmp/
+generated/.cache/

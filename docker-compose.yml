@@ -1,0 +1,11 @@
+services:
+  automation:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./generated:/app/generated
+      - ./tests/cucumber:/app/tests/cucumber
+    restart: unless-stopped
