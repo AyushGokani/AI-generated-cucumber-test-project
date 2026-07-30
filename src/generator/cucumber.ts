@@ -21,11 +21,13 @@ Rules:
 4. Feature description (if any) must be plain text lines — never use triple-quote docstrings under Feature.
 5. Step definitions use @cucumber/cucumber and Playwright (page from a World).
 6. Import { Given, When, Then } from '@cucumber/cucumber'.
-7. Use 'this.page' for Playwright Page (CustomWorld).
-8. Prefer resilient selectors (getByRole, getByLabel, getByText).
-9. Do not invent product URLs beyond what the ticket implies; use process.env.BASE_URL || 'http://localhost:3000'.
-10. Keep steps reusable and focused; avoid hard-coded sleeps.
-11. relativePath must be under features/ or steps/ only.`;
+7. Import assert from 'node:assert/strict'. NEVER import from '@playwright/test'.
+8. Import type { CustomWorld } from '../support/world.js' and type callbacks as async function (this: CustomWorld, ...).
+9. Use 'this.page' for Playwright Page (CustomWorld).
+10. Prefer resilient selectors (getByRole, getByLabel, getByText).
+11. Do not invent product URLs beyond what the ticket implies; use process.env.BASE_URL || 'http://localhost:3000'.
+12. Keep steps reusable and focused; avoid hard-coded sleeps.
+13. relativePath must be under features/ or steps/ only.`;
 
 function buildUserPrompt(issue: JiraIssue): string {
   return `Generate Cucumber tests for this Jira ticket.
