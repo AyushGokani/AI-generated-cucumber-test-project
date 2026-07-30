@@ -108,6 +108,19 @@ export interface PrResult {
   prUrl: string;
 }
 
+async function ensureGitIdentity(): Promise<void> {
+  try {
+    await git(["config", "user.email"]);
+  } catch {
+    await git(["config", "user.email", "cucumber-bot@users.noreply.github.com"]);
+  }
+  try {
+    await git(["config", "user.name"]);
+  } catch {
+    await git(["config", "user.name", "cucumber-automation-bot"]);
+  }
+}
+
 export async function createPullRequest(
   result: GenerationResult,
   options: { dryRun?: boolean } = {},
@@ -125,13 +138,24 @@ export async function createPullRequest(
     throw new Error("GITHUB_TOKEN is required to open PRs");
   }
 
+  await ensureGitIdentity();
+
   // Ensure files are committed on a dedicated branch.
   const base = config.GITHUB_BASE_BRANCH;
   await git(["fetch", "origin", base]).catch(() => undefined);
 
   // Create / reset branch from base
   const current = await git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  let stashed = false;
   try {
+    // Avoid checkout failures when the working tree is dirty.
+    try {
+      await git(["stash", "push", "-u", "-m", `pre-pr-${result.issueKey}`]);
+      stashed = true;
+    } catch {
+      stashed = false;
+    }
+
     await git(["checkout", "-B", branch, `origin/${base}`]).catch(async () => {
       await git(["checkout", "-B", branch, base]);
     });
@@ -148,10 +172,15 @@ export async function createPullRequest(
       ]);
     }
 
-    await git(["push", "-u", "origin", branch, "--force-with-lease"]);
+    // Prefer token auth for push (works even without interactive git login).
+    const remote = `https://x-access-token:${config.GITHUB_TOKEN}@github.com/${config.GITHUB_OWNER}/${config.GITHUB_REPO}.git`;
+    await git(["push", remote, `HEAD:refs/heads/${branch}`, "--force"]);
   } finally {
     if (current && current !== branch) {
       await git(["checkout", current]).catch(() => undefined);
+    }
+    if (stashed) {
+      await git(["stash", "pop"]).catch(() => undefined);
     }
   }
 
