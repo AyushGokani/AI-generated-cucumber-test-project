@@ -1,0 +1,19 @@
+{
+  "issueKey": "KAN-6",
+  "featureName": "user-login",
+  "summary": "User can log in with valid credentials",
+  "assumptions": [
+    "The login page is accessible at the base URL.",
+    "The dashboard is accessible after a successful login.",
+    "Error messages are displayed on the login page for invalid credentials."
+  ],
+  "tags": [
+    "@jira-KAN-6",
+    "@generated"
+  ],
+  "generatedAt": "2026-07-30T08:05:24.218Z",
+  "artifacts": [
+    "features/user-login.feature",
+    "steps/user-login.steps.ts"
+  ]
+}
