@@ -1,0 +1,73 @@
+name: Jira → Cucumber Automation
+
+# Triggered by Jira Automation (webhook → repository_dispatch)
+# or on a schedule as a safety net poller.
+
+on:
+  repository_dispatch:
+    types: [jira-ready-for-automation]
+  schedule:
+    # Every 30 minutes — disable by removing this block if you only use webhooks
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      issue_key:
+        description: "Optional Jira issue key (e.g. PROJ-123). Empty = JQL search."
+        required: false
+        default: ""
+      dry_run:
+        description: "Generate only (no PR)"
+        type: boolean
+        default: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Configure git identity
+        run: |
+          git config user.name "cucumber-automation-bot"
+          git config user.email "cucumber-bot@users.noreply.github.com"
+
+      - name: Run pipeline
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_JQL: ${{ vars.JIRA_JQL }}
+          JIRA_TRANSITION_IN_REVIEW: ${{ secrets.JIRA_TRANSITION_IN_REVIEW }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_MODE: ${{ vars.LLM_MODE || 'live' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO: ${{ github.event.repository.name }}
+          GITHUB_BASE_BRANCH: main
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          ISSUE="${{ github.event.client_payload.issue_key || github.event.inputs.issue_key }}"
+          ARGS=""
+          if [ -n "$ISSUE" ]; then
+            ARGS="--issue $ISSUE"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run --skip-pr"
+          fi
+          npm run pipeline -- $ARGS
