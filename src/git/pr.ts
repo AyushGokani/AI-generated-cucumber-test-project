@@ -27,6 +27,13 @@ export async function writeArtifacts(
   const written: string[] = [];
   const issueDir = path.join(GENERATED_ROOT, result.issueKey);
 
+  // Local shim so `import ... from '../support/world.js'` resolves under generated/<issue>/steps/
+  const supportShim = `/** Re-export for editor / typechecking under generated/<issue>/ */\nexport { CustomWorld } from "../../../tests/cucumber/support/world.js";\n`;
+  const supportPath = path.join(issueDir, "support", "world.ts");
+  await mkdir(path.dirname(supportPath), { recursive: true });
+  await writeFile(supportPath, supportShim, "utf8");
+  written.push(supportPath);
+
   for (const artifact of result.artifacts) {
     const abs = path.join(issueDir, artifact.relativePath);
     await mkdir(path.dirname(abs), { recursive: true });

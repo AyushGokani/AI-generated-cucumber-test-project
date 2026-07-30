@@ -10,5 +10,8 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["./**/*.ts", "../tests/cucumber/support/**/*.ts"]
+  "include": [
+    "./**/*.ts",
+    "../tests/cucumber/support/**/*.ts"
+  ]
 }
