@@ -7,7 +7,8 @@ on:
   repository_dispatch:
     types: [jira-ready-for-automation]
   schedule:
-    # Every 30 minutes — disable by removing this block if you only use webhooks
+    # Every 30 minutes — disable by removing this block if you only use webhooks.
+    # Skips automatically (does not fail) until JIRA_API_TOKEN / LLM_API_KEY secrets are set.
     - cron: "*/30 * * * *"
   workflow_dispatch:
     inputs:
@@ -27,25 +28,55 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - name: Check required secrets
+        id: check
+        run: |
+          if [ -z "$JIRA_API_TOKEN" ] || [ -z "$LLM_API_KEY" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+
+      - name: Skip (secrets not configured)
+        if: steps.check.outputs.configured != 'true' && github.event_name == 'schedule'
+        run: |
+          echo "JIRA_API_TOKEN / LLM_API_KEY secrets are not set — skipping scheduled run."
+          echo "See docs/github-pr-setup.md and docs/jira-setup.md to configure."
+
+      - name: Fail with guidance (manual/dispatch trigger)
+        if: steps.check.outputs.configured != 'true' && github.event_name != 'schedule'
+        run: |
+          echo "::error::Missing JIRA_API_TOKEN and/or LLM_API_KEY repository secrets."
+          echo "Add them under Settings → Secrets and variables → Actions."
+          exit 1
+
       - uses: actions/checkout@v4
+        if: steps.check.outputs.configured == 'true'
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.configured == 'true'
         with:
           node-version: "22"
           cache: npm
 
       - name: Install
+        if: steps.check.outputs.configured == 'true'
         run: npm ci
 
       - name: Configure git identity
+        if: steps.check.outputs.configured == 'true'
         run: |
           git config user.name "cucumber-automation-bot"
           git config user.email "cucumber-bot@users.noreply.github.com"
 
       - name: Run pipeline
+        if: steps.check.outputs.configured == 'true'
         env:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
