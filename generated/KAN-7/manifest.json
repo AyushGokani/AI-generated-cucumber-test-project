@@ -1,0 +1,19 @@
+{
+  "issueKey": "KAN-7",
+  "featureName": "add-product-to-cart",
+  "summary": "User can add a product to the cart",
+  "assumptions": [
+    "The user is already logged in.",
+    "The product page is accessible via a known URL.",
+    "The cart icon and count are visible on the page."
+  ],
+  "tags": [
+    "@jira-KAN-7",
+    "@generated"
+  ],
+  "generatedAt": "2026-07-31T04:13:32.204Z",
+  "artifacts": [
+    "features/add-product-to-cart.feature",
+    "steps/add-product-to-cart.steps.ts"
+  ]
+}
