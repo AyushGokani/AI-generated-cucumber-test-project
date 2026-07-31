@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { Octokit } from "@octokit/rest";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
@@ -21,30 +22,28 @@ export function branchNameFor(issueKey: string): string {
   return `auto/cucumber-${issueKey.toLowerCase()}`;
 }
 
-export async function writeArtifacts(
-  result: GenerationResult,
-): Promise<string[]> {
-  const written: string[] = [];
-  const issueDir = path.join(GENERATED_ROOT, result.issueKey);
+interface FileEntry {
+  relPath: string;
+  content: string;
+}
 
-  // Local shim so `import ... from '../support/world.js'` resolves under generated/<issue>/steps/
+function buildFileSet(result: GenerationResult): FileEntry[] {
+  const files: FileEntry[] = [];
+  const issueRel = path.join("generated", result.issueKey);
+
   const supportShim = `/** Re-export for editor / typechecking under generated/<issue>/ */\nexport { CustomWorld } from "../../../tests/cucumber/support/world.js";\n`;
-  const supportPath = path.join(issueDir, "support", "world.ts");
-  await mkdir(path.dirname(supportPath), { recursive: true });
-  await writeFile(supportPath, supportShim, "utf8");
-  written.push(supportPath);
+  files.push({ relPath: path.join(issueRel, "support", "world.ts"), content: supportShim });
 
   for (const artifact of result.artifacts) {
-    const abs = path.join(issueDir, artifact.relativePath);
-    await mkdir(path.dirname(abs), { recursive: true });
-    await writeFile(abs, artifact.content, "utf8");
-    written.push(abs);
-
+    files.push({
+      relPath: path.join(issueRel, artifact.relativePath),
+      content: artifact.content,
+    });
     // Also mirror into the live cucumber suite so CI can run them after merge.
-    const suitePath = path.join(ROOT, "tests", "cucumber", artifact.relativePath);
-    await mkdir(path.dirname(suitePath), { recursive: true });
-    await writeFile(suitePath, artifact.content, "utf8");
-    written.push(suitePath);
+    files.push({
+      relPath: path.join("tests", "cucumber", artifact.relativePath),
+      content: artifact.content,
+    });
   }
 
   const manifest = {
@@ -56,11 +55,29 @@ export async function writeArtifacts(
     generatedAt: new Date().toISOString(),
     artifacts: result.artifacts.map((a) => a.relativePath),
   };
-  const manifestPath = path.join(issueDir, "manifest.json");
-  await writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
-  written.push(manifestPath);
+  files.push({
+    relPath: path.join(issueRel, "manifest.json"),
+    content: JSON.stringify(manifest, null, 2),
+  });
 
+  return files;
+}
+
+async function writeFiles(baseDir: string, files: FileEntry[]): Promise<string[]> {
+  const written: string[] = [];
+  for (const f of files) {
+    const abs = path.join(baseDir, f.relPath);
+    await mkdir(path.dirname(abs), { recursive: true });
+    await writeFile(abs, f.content, "utf8");
+    written.push(abs);
+  }
   return written;
+}
+
+export async function writeArtifacts(
+  result: GenerationResult,
+): Promise<string[]> {
+  return writeFiles(ROOT, buildFileSet(result));
 }
 
 export function buildPrBody(
@@ -121,6 +138,22 @@ async function ensureGitIdentity(): Promise<void> {
   }
 }
 
+/** Free up `branch` if it's already checked out in another worktree from a previous failed run. */
+async function ensureBranchWorktreeFree(branch: string): Promise<void> {
+  const list = await git(["worktree", "list", "--porcelain"]).catch(() => "");
+  const blocks = list.split("\n\n");
+  for (const block of blocks) {
+    if (block.includes(`branch refs/heads/${branch}`)) {
+      const pathLine = block.split("\n").find((l) => l.startsWith("worktree "));
+      const wtPath = pathLine?.replace("worktree ", "").trim();
+      if (wtPath) {
+        await git(["worktree", "remove", "--force", wtPath]).catch(() => undefined);
+      }
+    }
+  }
+  await git(["worktree", "prune"]).catch(() => undefined);
+}
+
 export async function createPullRequest(
   result: GenerationResult,
   options: { dryRun?: boolean } = {},
@@ -140,48 +173,42 @@ export async function createPullRequest(
 
   await ensureGitIdentity();
 
-  // Ensure files are committed on a dedicated branch.
   const base = config.GITHUB_BASE_BRANCH;
   await git(["fetch", "origin", base]).catch(() => undefined);
+  await ensureBranchWorktreeFree(branch);
 
-  // Create / reset branch from base
-  const current = await git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  let stashed = false;
+  // Build the branch in an isolated worktree so the caller's own checkout,
+  // branch, and any uncommitted local changes are never touched.
+  const tmpDir = path.join(os.tmpdir(), `cucumber-pr-${result.issueKey}-${Date.now()}`);
+
   try {
-    // Avoid checkout failures when the working tree is dirty.
-    try {
-      await git(["stash", "push", "-u", "-m", `pre-pr-${result.issueKey}`]);
-      stashed = true;
-    } catch {
-      stashed = false;
-    }
+    await git(["worktree", "add", "-B", branch, tmpDir, `origin/${base}`]);
 
-    await git(["checkout", "-B", branch, `origin/${base}`]).catch(async () => {
-      await git(["checkout", "-B", branch, base]);
-    });
+    const files = buildFileSet(result);
+    await writeFiles(tmpDir, files);
 
-    await git(["add", "generated", "tests/cucumber"]);
-    const status = await git(["status", "--porcelain"]);
+    await git(["add", "-A"], tmpDir);
+    const status = await git(["status", "--porcelain"], tmpDir);
     if (!status) {
       logger.warn("No changes to commit for PR");
     } else {
-      await git([
-        "commit",
-        "-m",
-        `test(${result.issueKey}): generate Cucumber feature and steps`,
-      ]);
+      await git(
+        [
+          "commit",
+          "-m",
+          `test(${result.issueKey}): generate Cucumber feature and steps`,
+        ],
+        tmpDir,
+      );
     }
 
-    // Prefer token auth for push (works even without interactive git login).
+    // Token-authenticated push (works without interactive git login).
     const remote = `https://x-access-token:${config.GITHUB_TOKEN}@github.com/${config.GITHUB_OWNER}/${config.GITHUB_REPO}.git`;
-    await git(["push", remote, `HEAD:refs/heads/${branch}`, "--force"]);
+    await git(["push", remote, `HEAD:refs/heads/${branch}`, "--force"], tmpDir);
   } finally {
-    if (current && current !== branch) {
-      await git(["checkout", current]).catch(() => undefined);
-    }
-    if (stashed) {
-      await git(["stash", "pop"]).catch(() => undefined);
-    }
+    await git(["worktree", "remove", "--force", tmpDir]).catch(() => undefined);
+    await git(["worktree", "prune"]).catch(() => undefined);
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
   }
 
   const octokit = new Octokit({ auth: config.GITHUB_TOKEN });
