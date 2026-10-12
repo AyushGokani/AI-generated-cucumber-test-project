@@ -14,7 +14,8 @@
     "pipeline:dry": "tsx src/cli/pipeline.ts --dry-run",
     "generate": "tsx src/cli/generate.ts",
     "test:cucumber": "node --import tsx ./node_modules/@cucumber/cucumber/bin/cucumber.js --config cucumber.config.js",
-    "test:unit": "tsx --test src/pipeline/run.test.ts",
+    "test:unit": "tsx --test src/pipeline/run.test.ts src/audit/audit.test.ts",
+    "audit": "tsx src/audit/server.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

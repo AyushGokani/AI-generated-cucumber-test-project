@@ -13,3 +13,4 @@ test-results/
 .vscode/
 tmp/
 generated/.cache/
+data/

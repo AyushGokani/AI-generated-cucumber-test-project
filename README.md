@@ -21,6 +21,18 @@ This system watches Jira for stories marked ready for automation, uses an LLM to
                                 └──────────────┘
 ```
 
+## Fieldnote — IT audit workbench
+
+Fieldnote is a local workpaper for IT audit fieldwork. It keeps the engagement scope, a control program crosswalked to SOX ITGC, SOC 2, ISO/IEC 27001:2022 Annex A, and NIST CSF 2.0, the prepared-by-client list, attribute sampling, test conclusions, and findings in one place, then writes a workpaper summary.
+
+```bash
+npm run audit
+```
+
+Open http://127.0.0.1:4173. The first launch loads a Northwind Retail fieldwork example. Data is stored in `data/fieldnote.json`.
+
+The sample-size aid uses a Poisson reliability factor (gamma quantile) with a finite-population correction. It is a planning aid, not a firm's sampling manual, and the summary it prints is not an assurance report.
+
 ## What the developer does
 
 1. Review the draft PR (feature file + step definitions).
